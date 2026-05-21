@@ -1,0 +1,9 @@
+[package]
+name = "rate-limiter"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+[dev-dependencies]
+cargo-llvm-cov = "0.8.7"
