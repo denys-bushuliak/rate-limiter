@@ -7,5 +7,5 @@ pub trait RateLimiter: Send + Sync {
      *
      * Returns `true` if the request is allowed, `false` otherwise.
      */
-    fn allow(&mut self) -> bool;
+    fn allow(&self) -> bool;
 }

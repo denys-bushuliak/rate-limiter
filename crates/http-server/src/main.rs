@@ -11,7 +11,6 @@ use rate_limiter::TokenBucket;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
-use tokio::sync::Mutex;
 use tokio::time::timeout;
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -30,7 +29,7 @@ struct Args {
 
     /// Rate limit in requests per second
     #[arg(short, long, default_value = "10")]
-    rate_limit: f64,
+    rate_limit: u32,
 
     /// Algorithm to use for rate limiting
     #[arg(short, long)]
@@ -42,7 +41,7 @@ struct Args {
 
     /// Initial capacity of the rate limiter
     #[arg(short, long, default_value = "100")]
-    capacity: u64,
+    capacity: u32,
 }
 
 #[tokio::main]
@@ -51,7 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     dbg!(&args);
 
-    let algorithm: Arc<Mutex<dyn RateLimiter>> = match args.algorithm {
+    let algorithm: Arc<dyn RateLimiter + Send + Sync> = match args.algorithm {
         Algorithm::FixedWindow => {
             let window_size = args
                 .window_size
@@ -59,12 +58,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 .map(Duration::from_secs)
                 .expect("Window size should be a number");
             let max_requests = args.capacity as usize;
-            Arc::new(Mutex::new(FixedWindow::new(window_size, max_requests)))
+            Arc::new(FixedWindow::new(window_size, max_requests))
         }
         Algorithm::LeakyBucket => {
-            let capacity = args.capacity as f64;
+            let capacity = args.capacity;
             let leak_rate = args.rate_limit;
-            Arc::new(Mutex::new(LeakyBucket::new(capacity, leak_rate)))
+            Arc::new(LeakyBucket::new(capacity, leak_rate))
         }
         Algorithm::SlidingWindow => {
             let window_size = args
@@ -73,16 +72,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 .map(Duration::from_secs)
                 .expect("Windows size shoud be number");
             let max_requests = args.capacity as usize;
-            Arc::new(Mutex::new(SlidingWindow::new(window_size, max_requests)))
+            Arc::new(SlidingWindow::new(window_size, max_requests))
         }
         Algorithm::TokenBucket => {
-            let capacity = args.capacity as f64;
+            let capacity = args.capacity;
             let rate = args.rate_limit;
-            Arc::new(Mutex::new(TokenBucket::new(rate, capacity)))
+            Arc::new(TokenBucket::new(rate, capacity))
         }
     };
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3030));
+    // Nutze den Port aus den Argumenten
+    let addr = SocketAddr::from(([127, 0, 0, 1], args.port));
     let listener = TcpListener::bind(addr).await?;
     println!("Server hyper started on http://{}", addr);
 
@@ -130,8 +130,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
             match read_result {
                 Ok(Ok((_path, _body_offset))) => {
-                    let mut allow = { algorithm.try_lock().unwrap() };
-                    if allow.allow() {
+                    if algorithm.allow() {
                         let response = format!("HTTP/1.1 200 OK\r\n\r\n");
                         let _ = stream.write_all(response.as_bytes()).await;
                     } else {
