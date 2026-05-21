@@ -4,13 +4,11 @@ pub type Tokens = f64;
 
 #[derive(Debug, Clone)]
 pub struct TokenBucket {
-    rate: RequestsPerSecond,
+    rate: f64,
     capacity: Tokens,
     available_tokens: Tokens,
     last_refill: std::time::Instant,
 }
-
-pub type RequestsPerSecond = f64;
 
 impl TokenBucket {
     /**
@@ -21,7 +19,7 @@ impl TokenBucket {
      * * `rate` - The rate at which tokens are added to the requests per second.
      * * `capacity` - The maximum number of requests the bucket can hold.
      */
-    pub fn new(rate: RequestsPerSecond, capacity: Tokens) -> TokenBucket {
+    pub fn new(rate: f64, capacity: Tokens) -> TokenBucket {
         TokenBucket {
             rate,
             capacity: capacity.clone(),
