@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use rate_limiter::FixedWindow;
 use rate_limiter::LeakyBucket;
 use rate_limiter::RateLimiter;
@@ -13,35 +13,61 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 use tokio::time::timeout;
 
-#[derive(clap::ValueEnum, Clone, Debug)]
-pub enum Algorithm {
-    FixedWindow,
-    LeakyBucket,
-    SlidingWindow,
-    TokenBucket,
-}
-
 #[derive(Parser, Debug)]
+#[command(name = "rate_limiter_server")]
+#[command(about = "A fast, lock-free rate limiter server", long_about = None)]
 struct Args {
     /// Port to listen on
     #[arg(short, long, default_value = "3030")]
     port: u16,
 
-    /// Rate limit in requests per second
-    #[arg(short, long, default_value = "10")]
-    rate_limit: u32,
-
     /// Algorithm to use for rate limiting
-    #[arg(short, long)]
-    algorithm: Algorithm,
+    #[command(subcommand)]
+    algorithm: AlgorithmCommand,
+}
 
-    /// Window size for the rate limiter
-    #[arg(short, long, default_value = "100")]
-    window_size: String,
+#[derive(Subcommand, Debug, Clone)]
+pub enum AlgorithmCommand {
+    /// Use the Fixed Window algorithm
+    FixedWindow {
+        /// Window size in seconds
+        #[arg(short, long, default_value = "100")]
+        window_size: u64,
 
-    /// Initial capacity of the rate limiter
-    #[arg(short, long, default_value = "100")]
-    capacity: u32,
+        /// Maximum requests allowed in the window
+        #[arg(short, long, default_value = "100")]
+        capacity: u32,
+    },
+    /// Use the Leaky Bucket algorithm
+    LeakyBucket {
+        /// Rate at which the bucket leaks (requests per second)
+        #[arg(short, long, default_value = "10")]
+        rate_limit: u32,
+
+        /// Maximum capacity of the bucket
+        #[arg(short, long, default_value = "100")]
+        capacity: u32,
+    },
+    /// Use the Sliding Window algorithm
+    SlidingWindow {
+        /// Window size in seconds
+        #[arg(short, long, default_value = "100")]
+        window_size: u64,
+
+        /// Maximum requests allowed in the window
+        #[arg(short, long, default_value = "100")]
+        capacity: u32,
+    },
+    /// Use the Token Bucket algorithm
+    TokenBucket {
+        /// Rate at which tokens are added (requests per second)
+        #[arg(short, long, default_value = "10")]
+        rate_limit: u32,
+
+        /// Maximum token capacity of the bucket
+        #[arg(short, long, default_value = "100")]
+        capacity: u32,
+    },
 }
 
 #[tokio::main]
@@ -51,37 +77,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     dbg!(&args);
 
     let algorithm: Arc<dyn RateLimiter + Send + Sync> = match args.algorithm {
-        Algorithm::FixedWindow => {
-            let window_size = args
-                .window_size
-                .parse()
-                .map(Duration::from_secs)
-                .expect("Window size should be a number");
-            let max_requests = args.capacity as usize;
-            Arc::new(FixedWindow::new(window_size, max_requests))
-        }
-        Algorithm::LeakyBucket => {
-            let capacity = args.capacity;
-            let leak_rate = args.rate_limit;
-            Arc::new(LeakyBucket::new(capacity, leak_rate))
-        }
-        Algorithm::SlidingWindow => {
-            let window_size = args
-                .window_size
-                .parse()
-                .map(Duration::from_secs)
-                .expect("Windows size shoud be number");
-            let max_requests = args.capacity as usize;
-            Arc::new(SlidingWindow::new(window_size, max_requests))
-        }
-        Algorithm::TokenBucket => {
-            let capacity = args.capacity;
-            let rate = args.rate_limit;
-            Arc::new(TokenBucket::new(rate, capacity))
-        }
+        AlgorithmCommand::FixedWindow {
+            window_size,
+            capacity,
+        } => Arc::new(FixedWindow::new(
+            Duration::from_secs(window_size),
+            capacity as usize,
+        )),
+        AlgorithmCommand::LeakyBucket {
+            rate_limit,
+            capacity,
+        } => Arc::new(LeakyBucket::new(capacity, rate_limit)),
+        AlgorithmCommand::SlidingWindow {
+            window_size,
+            capacity,
+        } => Arc::new(SlidingWindow::new(
+            Duration::from_secs(window_size),
+            capacity as usize,
+        )),
+        AlgorithmCommand::TokenBucket {
+            rate_limit,
+            capacity,
+        } => Arc::new(TokenBucket::new(rate_limit, capacity)),
     };
 
-    // Nutze den Port aus den Argumenten
     let addr = SocketAddr::from(([127, 0, 0, 1], args.port));
     let listener = TcpListener::bind(addr).await?;
     println!("Server hyper started on http://{}", addr);
@@ -117,7 +136,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                             return Ok((req.path.unwrap_or("").to_string(), offset));
                         }
                         Ok(httparse::Status::Partial) => {
-                            // Запит ще не повний, продовжуємо вичитувати з сокету
                             continue;
                         }
                         Err(_) => {
