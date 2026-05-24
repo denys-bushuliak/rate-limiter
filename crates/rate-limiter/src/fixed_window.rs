@@ -17,6 +17,12 @@ pub struct FixedWindow {
 
 impl FixedWindow {
     pub fn new(window_size: Duration, max_requests: usize) -> Self {
+        assert!(
+            window_size.as_millis() > 0,
+            "window_size must be greater than 0"
+        );
+        assert!(max_requests < 256, "max_requests must be less than 256");
+
         Self {
             window_size,
             max_requests: max_requests as u32,
@@ -40,11 +46,6 @@ impl RateLimiter for FixedWindow {
     // Note: Changed to &self to enable lock-free usage
     fn allow(&self) -> bool {
         let window_ms = self.window_size.as_millis();
-
-        // Prevent division by zero if window_size is 0
-        if window_ms == 0 {
-            return false;
-        }
 
         // Calculate the current window ID based on elapsed time
         let current_window_id = (self.start_time.elapsed().as_millis() / window_ms) as u32;

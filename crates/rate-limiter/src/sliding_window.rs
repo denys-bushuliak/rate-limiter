@@ -23,6 +23,11 @@ impl SlidingWindow {
             "max_requests must fit in 16 bits"
         );
 
+        assert!(
+            window_size.as_millis() > 0,
+            "window_size must be greater than 0"
+        );
+
         Self {
             window_size,
             max_requests: max_requests as u32,
@@ -48,10 +53,6 @@ impl RateLimiter for SlidingWindow {
     fn allow(&self) -> bool {
         let now_ms = self.start_time.elapsed().as_millis();
         let window_ms = self.window_size.as_millis();
-
-        if window_ms == 0 {
-            return false;
-        }
 
         // Calculate which time window we are currently in
         let current_window_id = (now_ms / window_ms) as u32;
