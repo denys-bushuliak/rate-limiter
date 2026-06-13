@@ -1,0 +1,21 @@
+{
+	"name": "rate-limiter-rust",
+	"image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+	"features": {
+		"ghcr.io/devcontainers/features/common-utils:2": {},
+		"ghcr.io/devcontainers/features/rust:1": {}
+	},
+	"customizations": {
+		"vscode": {
+			"settings": {
+				"editor.tabSize": 4
+			},
+			"extensions": [
+				"rust-lang.rust-analyzer",
+				"llvm-vs-code-extensions.vscode-rust-analyzer"
+			]
+		}
+	},
+	"postCreateCommand": "npm install && rustup update || true",
+	"forwardPorts": [8080]
+}

@@ -1,4 +1,5 @@
 use std::{
+    marker::PhantomData,
     sync::atomic::{AtomicU64, Ordering},
     time::Instant,
 };
@@ -8,6 +9,7 @@ use crate::RateLimiter;
 #[derive(Debug)]
 pub struct LeakyBucket {
     capacity: u32,
+    _some_field: PhantomData<u32>,
     leak_rate: u32,
     start_time: Instant,
     // state holds 2 values packed into 64 bits:
@@ -25,6 +27,7 @@ impl LeakyBucket {
             leak_rate,
             start_time: Instant::now(),
             state: AtomicU64::new(init_state),
+            _some_field: PhantomData,
         }
     }
 
