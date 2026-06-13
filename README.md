@@ -4,7 +4,9 @@
 
 This repository contains an HTTP server and a rate limiting library. The project is structured as a workspace with the crates http-server and rate-limiter.
 
-## Running the Server
+## Documentation
+
+For technical documentation, including architecture overview and detailed API references, see the [docs/](docs/) directory.
 
 To run the server in release mode for maximum performance, use the following command. Since the program uses subcommands for the algorithms, you need to provide the desired algorithm as an argument.
 
